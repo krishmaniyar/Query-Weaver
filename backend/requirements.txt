@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+sqlalchemy
+# psycopg2-binary (will install psycopg2 via conda instead)
+chromadb
+sentence-transformers
+python-dotenv
+cerebras-cloud-sdk
