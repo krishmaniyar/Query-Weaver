@@ -20,4 +20,12 @@ export const sendQuery = async (question, selectedTables = []) => {
   return response.data;
 };
 
+export const executeConfirmedQuery = async (question, sql) => {
+  const response = await api.post('/query/execute', { 
+    question,
+    sql 
+  });
+  return response.data;
+};
+
 export default api;

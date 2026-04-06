@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { SendHorizonal, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ArrowUp, Check } from 'lucide-react';
 import { getDatabaseSchema } from '../services/api';
 
 export default function ChatInput({ onSendMessage, isLoading }) {
   const [input, setInput] = useState('');
   const [availableTables, setAvailableTables] = useState([]);
-  const [selectedTables, setSelectedTables] = useState(['Auto']); // 'Auto', 'All Tables', or list of explicit tables
+  const [selectedTables, setSelectedTables] = useState(['All Tables']); // 'All Tables', or list of explicit tables
+  const textareaRef = useRef(null);
 
   useEffect(() => {
     const fetchTables = async () => {
@@ -37,79 +38,103 @@ export default function ChatInput({ onSendMessage, isLoading }) {
     return () => es.close();
   }, []);
 
+  const adjustTextareaHeight = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'; // Reset height
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+  };
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input]);
+
   const handleSubmit = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!input.trim() || isLoading) return;
     
-    // Pass 'Auto' as empty array for backend defaulting, else pass the literal selections
-    const tablesToPass = selectedTables.includes('Auto') ? [] : selectedTables;
+    const tablesToPass = selectedTables.includes('All Tables') ? [] : selectedTables;
     onSendMessage(input.trim(), tablesToPass);
     setInput('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
   };
 
   const toggleTableSelection = (table) => {
-    if (table === 'Auto' || table === 'All Tables') {
+    if (table === 'All Tables') {
       setSelectedTables([table]);
       return;
     }
 
-    // Toggle specific table
-    let newSelection = selectedTables.filter(t => t !== 'Auto' && t !== 'All Tables');
+    let newSelection = selectedTables.filter(t => t !== 'All Tables');
     if (newSelection.includes(table)) {
       newSelection = newSelection.filter(t => t !== table);
-      if (newSelection.length === 0) newSelection = ['Auto'];
+      if (newSelection.length === 0) newSelection = ['All Tables'];
     } else {
       newSelection.push(table);
     }
     setSelectedTables(newSelection);
   };
 
-  const allOptions = ['Auto', 'All Tables', ...availableTables];
+  const allOptions = ['All Tables', ...availableTables];
 
   return (
-    <div className="w-full max-w-4xl mx-auto flex flex-col gap-2">
-      {/* Table Selector Pills */}
-      <div className="flex flex-wrap gap-2 px-2">
-        <span className="text-xs text-gray-400 self-center mr-1 tracking-wide uppercase">Context:</span>
-        {allOptions.map(option => {
-          const isSelected = selectedTables.includes(option);
-          return (
-            <button
-              key={option}
-              type="button"
-              onClick={() => toggleTableSelection(option)}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full transition-all border ${
-                isSelected 
-                  ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' 
-                  : 'bg-[#2a2a2a] text-gray-400 border-white/5 hover:border-white/20 hover:text-gray-200'
-              }`}
-            >
-              {isSelected && <Check className="w-3 h-3" />}
-              {option}
-            </button>
-          )
-        })}
-      </div>
-
+    <div className="w-full max-w-3xl mx-auto flex flex-col gap-2 relative">
       <form 
         onSubmit={handleSubmit}
-        className="relative flex items-center w-full rounded-3xl bg-[#2f2f2f] border border-white/10 shadow-lg focus-within:ring-1 focus-within:ring-white/20 transition-all p-1.5"
+        className="relative flex flex-col w-full rounded-3xl bg-[#2f2f2f] shadow-[0_0_15px_rgba(0,0,0,0.2)] focus-within:ring-1 focus-within:ring-white/20 transition-all p-2 pl-4 border border-white/5"
       >
-        <input
-          type="text"
+        <textarea
+          ref={textareaRef}
+          rows={1}
           placeholder="Message Text-to-SQL Assistant..."
-          className="w-full bg-transparent px-4 py-2 outline-none text-gray-100 placeholder-gray-400"
+          className="w-full max-h-[200px] bg-transparent outline-none text-gray-100 placeholder-gray-400 resize-none py-2 pr-12 leading-relaxed"
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
           disabled={isLoading}
+          style={{ minHeight: '44px' }}
         />
+        
+        {/* Submit Button */}
         <button
           type="submit"
           disabled={!input.trim() || isLoading}
-          className="absolute right-2 p-2 bg-gray-200 hover:bg-white text-[#212121] rounded-full disabled:opacity-30 disabled:bg-gray-600 disabled:text-gray-400 transition-colors"
+          className="absolute right-3 bottom-3 p-1.5 bg-gray-100 hover:bg-white text-black rounded-full disabled:opacity-30 disabled:bg-[#2f2f2f] disabled:text-gray-500 disabled:border disabled:border-white/10 transition-colors"
         >
-          <SendHorizonal className="w-5 h-5" />
+          <ArrowUp className="w-5 h-5" strokeWidth={2.5} />
         </button>
+
+        {/* Minimal Context Selector */}
+        <div className="flex flex-wrap gap-1.5 pt-2 pb-1 pr-12 mt-1 border-t border-white/5">
+          <span className="text-[10px] text-gray-500 self-center mr-1 uppercase tracking-wider font-semibold">Context:</span>
+          {allOptions.map(option => {
+            const isSelected = selectedTables.includes(option);
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => toggleTableSelection(option)}
+                className={`flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-md transition-colors border ${
+                  isSelected 
+                    ? 'bg-white/10 text-gray-200 border-transparent' 
+                    : 'bg-transparent text-gray-500 border-white/5 hover:bg-white/5 hover:text-gray-300'
+                }`}
+              >
+                {isSelected && <Check className="w-3 h-3" />}
+                {option}
+              </button>
+            )
+          })}
+        </div>
       </form>
     </div>
   );

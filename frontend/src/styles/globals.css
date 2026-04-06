@@ -10,15 +10,15 @@
 
 /* Custom scrollbar for better dark mode aesthetics */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  @apply bg-gray-800;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-600 rounded-full;
+  @apply bg-white/10 rounded-full;
 }
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-500;
+  @apply bg-white/20;
 }

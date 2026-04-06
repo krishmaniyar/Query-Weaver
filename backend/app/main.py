@@ -16,12 +16,12 @@ logger = setup_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Sync ChromaDB schema from live SQLite on every startup."""
+    """Sync ChromaDB schema from the live database on every startup."""
     print("\n" + "="*55)
     print("  🚀  Text-to-SQL backend starting up...")
     print("="*55)
-    logger.info("=== SERVER STARTUP: Syncing ChromaDB schema from SQLite ===")
-    print("  ⏳  Syncing ChromaDB schema from SQLite...")
+    logger.info("=== SERVER STARTUP: Syncing ChromaDB schema from database ===")
+    print("  ⏳  Syncing ChromaDB schema from database...")
     try:
         from app.vectorstore.vectordb import sync_tables_to_schema
         synced = sync_tables_to_schema()

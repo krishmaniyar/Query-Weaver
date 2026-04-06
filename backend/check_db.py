@@ -1,8 +1,16 @@
-import sqlite3
+"""
+Utility script: lists all tables in the configured database.
+Run with:  python check_db.py
+"""
+import sys
+import os
 
-conn = sqlite3.connect('app.db')
-cursor = conn.cursor()
-cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-tables = cursor.fetchall()
-print("Tables in app.db:", tables)
-conn.close()
+sys.path.insert(0, os.path.dirname(__file__))
+
+from sqlalchemy import inspect
+from app.db.database import get_engine
+
+engine = get_engine()
+inspector = inspect(engine)
+tables = inspector.get_table_names()
+print("Tables in database:", tables)

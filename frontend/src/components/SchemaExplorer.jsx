@@ -34,24 +34,18 @@ export default function SchemaExplorer({ isOpen, onToggle }) {
     }
   }, []);
 
-  // Initial load
   useEffect(() => {
     fetchSchema();
   }, [fetchSchema]);
 
-  // SSE: re-fetch only when the backend signals a schema change
   useEffect(() => {
     const es = new EventSource(SSE_URL);
-
     es.addEventListener('schema_changed', () => {
-      fetchSchema(false); // silent refresh — no spinner
+      fetchSchema(false);
     });
-
     es.onerror = () => {
-      // EventSource will automatically reconnect; nothing extra needed
       console.warn('SSE connection lost, will reconnect automatically.');
     };
-
     return () => es.close();
   }, [fetchSchema]);
 
@@ -65,26 +59,26 @@ export default function SchemaExplorer({ isOpen, onToggle }) {
   if (!isOpen) return null;
 
   return (
-    <div className="w-64 bg-[#171717] border-r border-white/10 flex flex-col h-full flex-shrink-0 transition-all duration-300">
-      <div className="p-4 flex flex-col gap-2 border-b border-white/10">
+    <div className="w-64 bg-[#171717] flex flex-col h-full flex-shrink-0 transition-all duration-300 z-20">
+      <div className="p-4 flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-gray-200 font-semibold">
-            <Database className="w-5 h-5" />
-            <span>Schema Explorer</span>
+          <div className="flex items-center gap-2 text-gray-300 font-semibold tracking-wide text-xs uppercase">
+            <Database className="w-4 h-4" />
+            <span>Schema</span>
           </div>
           <div className="flex items-center gap-1">
             <button
               onClick={() => fetchSchema()}
               disabled={isLoading}
               title="Refresh schema"
-              className="p-1.5 rounded hover:bg-[#2f2f2f] text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50"
+              className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={onToggle}
               title="Close Schema Explorer"
-              className="p-1.5 rounded hover:bg-[#2f2f2f] text-gray-400 hover:text-gray-200 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-gray-200 transition-colors"
             >
               <Menu className="w-4 h-4" />
             </button>
@@ -92,7 +86,7 @@ export default function SchemaExplorer({ isOpen, onToggle }) {
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="flex-1 overflow-y-auto px-2 pb-4">
         {isLoading ? (
           <div className="flex items-center justify-center p-4 text-gray-400">
             <Loader2 className="w-5 h-5 animate-spin" />
@@ -105,15 +99,15 @@ export default function SchemaExplorer({ isOpen, onToggle }) {
         ) : (
           <div className="space-y-1">
             {schema.map((tableInfo, idx) => (
-              <div key={idx} className="mb-2">
+              <div key={idx} className="mb-1">
                 <button 
                   onClick={() => toggleTable(tableInfo.table)}
-                  className="flex items-center w-full text-left p-2 rounded-md hover:bg-[#2f2f2f] transition-colors group"
+                  className="flex items-center w-full text-left px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors group"
                 >
                   {expandedTables[tableInfo.table] ? (
-                    <ChevronDown className="w-4 h-4 text-gray-400 mr-1" />
+                    <ChevronDown className="w-4 h-4 text-gray-500 mr-1.5" />
                   ) : (
-                    <ChevronRight className="w-4 h-4 text-gray-400 mr-1" />
+                    <ChevronRight className="w-4 h-4 text-gray-500 mr-1.5" />
                   )}
                   <TableProperties className="w-4 h-4 text-gray-400 mr-2 group-hover:text-gray-300 transition-colors" />
                   <span className="text-sm font-medium text-gray-300">{tableInfo.table}</span>
@@ -123,7 +117,7 @@ export default function SchemaExplorer({ isOpen, onToggle }) {
                   <ul className="pl-9 pr-2 py-1 space-y-1">
                     {tableInfo.columns?.map((col, colIdx) => (
                       <li key={colIdx} className="flex justify-between items-center text-xs">
-                        <span className="text-gray-400 truncate pr-2">{col.name}</span>
+                        <span className="text-gray-400 truncate pr-2" title={col.name}>{col.name}</span>
                         <span className="text-gray-500 font-mono text-[10px] uppercase">{col.type}</span>
                       </li>
                     ))}

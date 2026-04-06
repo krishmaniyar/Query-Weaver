@@ -20,7 +20,6 @@ export default function DataChart({ data }) {
     let numericCols = [];
     let categoricalCols = [];
     
-    // Check first few rows to confidently determine types
     for (const col of columns) {
       let isNumeric = true;
       for (let i = 0; i < Math.min(data.length, 5); i++) {
@@ -36,7 +35,6 @@ export default function DataChart({ data }) {
     
     if (numericCols.length === 0) return null; // Can't chart without numbers
     
-    // Suggest the best X and Y axes defaults
     const defaultX = categoricalCols.length > 0 ? categoricalCols[0] : columns[0];
     const yAxisCols = numericCols.filter(c => !c.toLowerCase().includes('id'));
     const defaultY = yAxisCols.length > 0 ? yAxisCols[0] : numericCols[0];
@@ -44,7 +42,6 @@ export default function DataChart({ data }) {
     return { columns, numericCols, categoricalCols, defaultX, defaultY };
   }, [data]);
 
-  // Set defaults when data changes
   useEffect(() => {
     if (analysis) {
       setSelectedXAxis(analysis.defaultX);
@@ -56,7 +53,6 @@ export default function DataChart({ data }) {
 
   const { columns, numericCols } = analysis;
   
-  // Format data for correct parsing
   const chartData = data.map(row => ({
     ...row,
     [selectedYAxis]: Number(row[selectedYAxis]),
@@ -70,15 +66,15 @@ export default function DataChart({ data }) {
       case 'line':
         return (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 25 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} />
-              <XAxis dataKey={selectedXAxis} stroke="#9ca3af" tick={{ fill: '#9ca3af' }} />
-              <YAxis stroke="#9ca3af" tick={{ fill: '#9ca3af' }} />
+              <XAxis dataKey={selectedXAxis} stroke="#6b7280" tick={{ fill: '#e5e7eb', fontSize: 13 }} tickMargin={8} angle={-15} textAnchor="end" />
+              <YAxis stroke="#6b7280" tick={{ fill: '#e5e7eb', fontSize: 13 }} tickMargin={8} />
               <Tooltip 
-                contentStyle={{ backgroundColor: '#2f2f2f', border: '1px solid rgba(255,255,255,0.1)', color: '#f3f4f6', borderRadius: '8px' }} 
-                itemStyle={{ color: '#10a37f' }}
+                contentStyle={{ backgroundColor: '#171717', border: '1px solid rgba(255,255,255,0.1)', color: '#f3f4f6', borderRadius: '8px', fontSize: '14px' }} 
+                itemStyle={{ color: '#10a37f', fontWeight: 'bold' }}
               />
-              <Legend />
+              <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '14px', color: '#e5e7eb' }} />
               <Line type="monotone" dataKey={selectedYAxis} stroke="#10a37f" strokeWidth={3} dot={{ r: 4, fill: '#10a37f', strokeWidth: 0 }} activeDot={{ r: 6 }} />
             </LineChart>
           </ResponsiveContainer>
@@ -86,12 +82,12 @@ export default function DataChart({ data }) {
       case 'pie':
         return (
           <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
+            <PieChart margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
               <Pie
                 data={chartData}
                 cx="50%"
                 cy="50%"
-                labelLine={false}
+                labelLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
                 outerRadius={100}
                 fill="#10a37f"
                 dataKey={selectedYAxis}
@@ -103,10 +99,10 @@ export default function DataChart({ data }) {
                 ))}
               </Pie>
               <Tooltip 
-                contentStyle={{ backgroundColor: '#2f2f2f', border: '1px solid rgba(255,255,255,0.1)', color: '#f3f4f6', borderRadius: '8px' }} 
-                itemStyle={{ color: '#f3f4f6' }}
+                contentStyle={{ backgroundColor: '#171717', border: '1px solid rgba(255,255,255,0.1)', color: '#f3f4f6', borderRadius: '8px', fontSize: '14px' }} 
+                itemStyle={{ color: '#f3f4f6', fontWeight: 'bold' }}
               />
-              <Legend />
+              <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '14px', color: '#e5e7eb' }} />
             </PieChart>
           </ResponsiveContainer>
         );
@@ -114,16 +110,16 @@ export default function DataChart({ data }) {
       default:
         return (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 25 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} />
-              <XAxis dataKey={selectedXAxis} stroke="#9ca3af" tick={{ fill: '#9ca3af' }} />
-              <YAxis stroke="#9ca3af" tick={{ fill: '#9ca3af' }} />
+              <XAxis dataKey={selectedXAxis} stroke="#6b7280" tick={{ fill: '#e5e7eb', fontSize: 13 }} tickMargin={8} angle={-15} textAnchor="end" />
+              <YAxis stroke="#6b7280" tick={{ fill: '#e5e7eb', fontSize: 13 }} tickMargin={8} />
               <Tooltip 
-                contentStyle={{ backgroundColor: '#2f2f2f', border: '1px solid rgba(255,255,255,0.1)', color: '#f3f4f6', borderRadius: '8px' }} 
-                itemStyle={{ color: '#10a37f' }}
+                contentStyle={{ backgroundColor: '#171717', border: '1px solid rgba(255,255,255,0.1)', color: '#f3f4f6', borderRadius: '8px', fontSize: '14px' }} 
+                itemStyle={{ color: '#10a37f', fontWeight: 'bold' }}
                 cursor={{ fill: '#ffffff', opacity: 0.05 }}
               />
-              <Legend />
+              <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '14px', color: '#e5e7eb' }} />
               <Bar dataKey={selectedYAxis} fill="#10a37f" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -132,28 +128,28 @@ export default function DataChart({ data }) {
   };
 
   return (
-    <div className="mt-6 border border-white/10 bg-black/20 rounded-xl overflow-hidden shadow-lg">
-      <div className="flex flex-wrap gap-3 justify-between items-center bg-[#2f2f2f] px-4 py-3 border-b border-white/10">
+    <div className="mt-2 border border-white/10 bg-[#171717] rounded-xl overflow-hidden">
+      <div className="flex flex-wrap gap-3 justify-between items-center bg-[#212121]/50 px-4 py-2.5 border-b border-white/10">
         <div className="flex items-center gap-3 text-sm text-gray-300">
-          <div className="flex items-center gap-2">
-            <label className="font-semibold">Y-Axis:</label>
+          <div className="flex items-center gap-2 text-xs">
+            <label className="font-semibold text-gray-400">Y-Axis:</label>
             <select 
               value={selectedYAxis} 
               onChange={(e) => setSelectedYAxis(e.target.value)}
-              className="bg-[#171717] border border-white/10 rounded px-2 py-1 text-white outline-none focus:border-[#10a37f]"
+              className="bg-[#2a2a2a] border border-transparent rounded px-2 py-1 text-white outline-none focus:border-white/20 transition-colors"
             >
               {numericCols.map(col => (
                 <option key={col} value={col}>{col}</option>
               ))}
             </select>
           </div>
-          <span className="text-gray-500">by</span>
-          <div className="flex items-center gap-2">
-            <label className="font-semibold">X-Axis:</label>
+          <span className="text-gray-600 text-xs">by</span>
+          <div className="flex items-center gap-2 text-xs">
+            <label className="font-semibold text-gray-400">X-Axis:</label>
             <select 
               value={selectedXAxis} 
               onChange={(e) => setSelectedXAxis(e.target.value)}
-              className="bg-[#171717] border border-white/10 rounded px-2 py-1 text-white outline-none focus:border-[#10a37f]"
+              className="bg-[#2a2a2a] border border-transparent rounded px-2 py-1 text-white outline-none focus:border-white/20 transition-colors"
             >
               {columns.map(col => (
                 <option key={col} value={col}>{col}</option>
@@ -161,27 +157,27 @@ export default function DataChart({ data }) {
             </select>
           </div>
         </div>
-        <div className="flex bg-[#171717] rounded-lg p-1 border border-white/5">
+        <div className="flex bg-[#2a2a2a] rounded-lg p-0.5 border border-white/5">
           <button 
             onClick={() => setChartType('bar')}
-            className={`p-1.5 rounded-md transition-colors ${chartType === 'bar' ? 'bg-[#2f2f2f] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+            className={`p-1.5 rounded-md transition-colors ${chartType === 'bar' ? 'bg-[#3f3f3f] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
             title="Bar Chart"
           >
-            <BarChart3 className="w-4 h-4" />
+            <BarChart3 className="w-3.5 h-3.5" />
           </button>
           <button 
             onClick={() => setChartType('line')}
-            className={`p-1.5 rounded-md transition-colors ${chartType === 'line' ? 'bg-[#2f2f2f] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+            className={`p-1.5 rounded-md transition-colors ${chartType === 'line' ? 'bg-[#3f3f3f] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
             title="Line Chart"
           >
-            <LineIcon className="w-4 h-4" />
+            <LineIcon className="w-3.5 h-3.5" />
           </button>
           <button 
             onClick={() => setChartType('pie')}
-            className={`p-1.5 rounded-md transition-colors ${chartType === 'pie' ? 'bg-[#2f2f2f] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+            className={`p-1.5 rounded-md transition-colors ${chartType === 'pie' ? 'bg-[#3f3f3f] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
             title="Pie Chart"
           >
-            <PieIcon className="w-4 h-4" />
+            <PieIcon className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

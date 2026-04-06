@@ -13,8 +13,8 @@ export default function SQLViewer({ sql }) {
   };
 
   return (
-    <div className="my-4 overflow-hidden rounded-xl border border-white/10 bg-black shadow-lg relative group">
-      <div className="flex justify-between items-center bg-[#2f2f2f] px-4 py-2 border-b border-white/10">
+    <div className="my-2 overflow-hidden rounded-xl border border-white/10 bg-[#171717] relative group">
+      <div className="flex justify-between items-center bg-[#212121]/50 px-4 py-2 border-b border-white/10">
         <div className="flex items-center gap-2">
           <Terminal className="w-4 h-4 text-gray-400" />
           <span className="text-xs font-mono text-gray-400 uppercase tracking-wider">Generated SQL</span>
@@ -27,8 +27,8 @@ export default function SQLViewer({ sql }) {
           {copied ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
         </button>
       </div>
-      <div className="p-4 overflow-x-auto">
-        <pre className="text-sm font-mono text-gray-200">
+      <div className="p-4 overflow-x-auto custom-scrollbar">
+        <pre className="text-sm font-mono text-gray-300 leading-relaxed">
           <code>{sql}</code>
         </pre>
       </div>

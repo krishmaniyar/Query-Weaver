@@ -1,8 +1,23 @@
 from sqlalchemy import inspect, text
 from app.db.database import get_engine
+from decimal import Decimal
+from datetime import datetime, date, time, timedelta
 import logging
 
 from app.logger import setup_logger
+
+
+def _safe_value(val):
+    """Convert MySQL-specific types to JSON-serializable equivalents."""
+    if isinstance(val, Decimal):
+        return float(val)
+    if isinstance(val, (datetime, date, time)):
+        return val.isoformat()
+    if isinstance(val, timedelta):
+        return str(val)
+    if isinstance(val, bytes):
+        return val.decode("utf-8", errors="replace")
+    return val
 logger = setup_logger(__name__)
 
 def load_database_schema():
@@ -48,7 +63,7 @@ def get_table_data(table_name: str, limit: int = 50) -> list:
                 
             keys = result.keys()
             # Convert row objects into structured dictionaries
-            return [dict(zip(keys, row)) for row in rows]
+            return [{k: _safe_value(v) for k, v in zip(keys, row)} for row in rows]
     except Exception as e:
         logger.error(f"Error fetching data from table {table_name}: {e}")
         return []

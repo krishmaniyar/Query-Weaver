@@ -1,354 +1,1057 @@
-# 🧠 Text-to-SQL Assistant
+# Text-to-SQL Assistant
 
-A full-stack, AI-powered natural language to SQL application. Ask questions in plain English and the assistant generates, executes, and visualizes SQL queries against your database in real time.
-
-![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green?logo=fastapi)
-![React](https://img.shields.io/badge/React-18-blue?logo=react)
-![SQLite](https://img.shields.io/badge/SQLite-3-lightgrey?logo=sqlite)
-![Cerebras](https://img.shields.io/badge/LLM-Cerebras-orange)
+An intelligent natural language interface for database querying that converts plain English questions into executable SQL queries using Large Language Models (LLMs) and vector-based schema retrieval.
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
-- [Overview](#overview)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Backend Setup](#backend-setup)
-  - [Frontend Setup](#frontend-setup)
-- [Configuration](#configuration)
+- [Project Overview](#project-overview)
+- [Architecture Overview](#architecture-overview)
+- [System Design Diagrams](#system-design-diagrams)
+- [Installation & Setup](#installation--setup)
 - [Usage](#usage)
-- [API Endpoints](#api-endpoints)
-- [Contributing](#contributing)
+- [Performance Measurement & Execution Timing](#performance-measurement--execution-timing)
+- [Project Structure](#project-structure)
+- [Configuration & Hyperparameters](#configuration--hyperparameters)
+- [Metrics & Evaluation](#metrics--evaluation)
+- [Dependencies](#dependencies)
+- [Contributing Guidelines](#contributing-guidelines)
 - [License](#license)
 
 ---
 
-## Overview
+## Project Overview
 
-**Text-to-SQL Assistant** bridges the gap between natural language and databases. Users type questions like _"Show me the top 3 customers by total spending"_ and the system:
+### Description
 
-1. Retrieves the relevant database schema (via vector search or manual table selection).
-2. Sends the schema + question to a large language model (Cerebras).
-3. Executes the generated SQL against a live SQLite database.
-4. Returns structured results and interactive visualizations.
+The **Text-to-SQL Assistant** is a full-stack application that enables users to interact with relational databases using natural language. Users can ask questions like "Show me the top 5 customers by revenue" or "What were the total sales last quarter?" and receive accurate SQL queries along with visualized results.
 
----
+### Objectives
 
-## ✨ Features
+- **Democratize Database Access**: Enable non-technical stakeholders to query databases without SQL knowledge
+- **Enhance Developer Productivity**: Provide developers with a rapid prototyping tool for database exploration
+- **Ensure Query Safety**: Implement security measures to prevent destructive operations without user confirmation
+- **Maintain Context**: Leverage conversational history for multi-turn query refinement
 
-### Core
-- **Natural Language → SQL** — Converts plain English questions into valid SQLite queries using the Cerebras LLM (`gpt-oss-120b`).
-- **Smart Schema Retrieval** — Automatically finds the most relevant tables using ChromaDB vector similarity search, or lets users manually select tables.
-- **Live SQL Execution** — Runs generated queries against a real SQLite database and returns structured results.
-- **Conversational Context** — Stores and retrieves past question/SQL pairs to improve accuracy over time.
+### Key Features
 
-### Frontend
-- **Interactive Chat UI** — A modern, dark-themed chat interface built with React.
-- **Schema Explorer Sidebar** — Browse all tables and columns in a collapsible sidebar with real-time updates via Server-Sent Events (SSE).
-- **Table Selection Pills** — Choose which tables the AI should consider: _Auto_ (vector search), _All Tables_, or specific tables — reducing unnecessary tokens and improving accuracy.
-- **Data Visualization** — Automatically renders bar, line, and pie charts using Recharts, with **selectable X and Y axes** so you can explore data from any angle.
-- **SQL Viewer** — Syntax-highlighted display of the generated SQL query.
-- **Results Table** — Clean, scrollable table view of query results.
-- **Persistent Chat History** — Conversations are saved to `localStorage` and persist across browser sessions.
-
-### Backend
-- **Intelligent Prompt Engineering** — SQLite-specific rules are injected into the LLM prompt (no `INTERVAL`, use `INSERT OR IGNORE`, etc.) ensuring generated SQL is always compatible.
-- **DDL Detection & Auto-Sync** — When `CREATE TABLE`, `ALTER TABLE`, or `DROP TABLE` is executed, the schema is automatically re-synced to ChromaDB and all connected clients are notified via SSE.
-- **Detailed Request Logging** — Every request is logged step-by-step: schema retrieval → history lookup → LLM prompt → SQL execution → response time.
-- **Server-Sent Events (SSE)** — Real-time push notifications from backend to frontend when the schema changes.
-- **Token Optimization** — Only the top 5 rows per table are sent to the LLM for context, minimizing token usage.
+| Feature | Description |
+|---------|-------------|
+| **Natural Language to SQL** | Converts English questions into MySQL-compatible SQL queries |
+| **Schema-Aware Retrieval** | Uses vector embeddings (ChromaDB) to intelligently retrieve relevant table schemas |
+| **Conversational Memory** | Stores and retrieves chat history for contextual follow-up questions |
+| **Data Visualization** | Renders query results as interactive tables and charts |
+| **Schema Explorer** | Interactive sidebar for browsing database tables and columns |
+| **Safety Controls** | Requires confirmation for data-modifying operations (INSERT, UPDATE, DELETE, DDL) |
+| **Multi-Strategy Schema Selection** | Supports Auto (AI-selected), All Tables, or Specific Table selection |
+| **Real-time Logging** | Comprehensive request/response logging with execution timing |
 
 ---
 
-## 🏗️ Architecture
+## Architecture Overview
+
+### High-Level System Design
+
+The system follows a **three-tier architecture** with clear separation of concerns:
+
+1. **Presentation Layer**: React-based SPA with Tailwind CSS for responsive UI
+2. **Application Layer**: FastAPI backend handling HTTP requests, LLM orchestration, and database operations
+3. **Data Layer**: MySQL database for application data, ChromaDB for vector storage of schemas and chat history
+
+### Package Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Frontend (React + Vite)              │
-│                                                             │
-│  ChatInput ──► ChatPage ──► API Service ──► Backend         │
-│  (table selection pills)     (sendQuery)                    │
-│                                                             │
-│  SchemaExplorer ◄── SSE ◄── Backend /schema/events          │
-│  DataChart (selectable axes)                                │
-│  ResultTable, SQLViewer, ChatMessage                        │
-└─────────────────────────────────────────────────────────────┘
-                            │  HTTP + SSE
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Backend (FastAPI + Uvicorn)                │
-│                                                             │
-│  /query/          →  Schema Retrieval (ChromaDB / SQLite)   │
-│                   →  History Retrieval (ChromaDB)            │
-│                   →  LLM SQL Generation (Cerebras)          │
-│                   →  SQL Execution (SQLAlchemy + SQLite)     │
-│                   →  DDL Sync + SSE Broadcast               │
-│                                                             │
-│  /schema/         →  Live table & column metadata           │
-│  /schema/events   →  SSE stream for schema changes          │
-└─────────────────────────────────────────────────────────────┘
-                            │
-              ┌─────────────┼─────────────┐
-              ▼             ▼             ▼
-         ┌────────┐   ┌──────────┐   ┌──────────┐
-         │ SQLite │   │ ChromaDB │   │ Cerebras │
-         │  (DB)  │   │ (Vector  │   │  (LLM)   │
-         │        │   │  Store)  │   │          │
-         └────────┘   └──────────┘   └──────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              PRESENTATION LAYER                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                          Frontend (React)                            │   │
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐  │   │
+│  │  │  ChatPage   │ │SchemaExplorer│ │ DataChart   │ │ ResultTable │  │   │
+│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      │ HTTP / REST / SSE
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            APPLICATION LAYER                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                         Backend (FastAPI)                          │   │
+│  │                                                                    │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐            │   │
+│  │  │ query_routes │  │ schema_routes│  │   Middleware   │            │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘            │   │
+│  │                                                                    │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐            │   │
+│  │  │ LLM Service  │  │ SQL Executor │  │ Schema Loader│            │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘            │   │
+│  │                                                                    │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐            │   │
+│  │  │ Vector Store │  │   Logger     │  │ SSE Broadcaster           │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘            │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      │ SQLAlchemy / Vector Operations
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                               DATA LAYER                                     │
+│  ┌─────────────────────┐    ┌─────────────────────┐                       │
+│  │      MySQL DB       │    │     ChromaDB          │                       │
+│  │  (Application Data) │    │ (Vector Embeddings)   │                       │
+│  └─────────────────────┘    └─────────────────────┘                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      │ API Calls
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          EXTERNAL SERVICES                                  │
+│  ┌─────────────────────┐    ┌─────────────────────┐                       │
+│  │   Groq LLM API      │    │  Sentence-Transformers │                     │
+│  │  (llama-3.3-70b)    │    │   (all-MiniLM-L6-v2)  │                     │
+│  └─────────────────────┘    └─────────────────────┘                       │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Package Explanations:**
+
+| Package | Responsibility |
+|---------|---------------|
+| `Frontend` | React SPA components for chat interface, schema browsing, and data visualization |
+| `Routes` | FastAPI route handlers for HTTP endpoints and request validation |
+| `LLM Service` | Orchestrates communication with Groq API for SQL generation |
+| `SQL Executor` | Safely executes SQL queries with result sanitization and multi-statement support |
+| `Schema Loader` | Introspects database schema and loads table metadata |
+| `Vector Store` | Manages ChromaDB collections for semantic schema and history search |
+| `SSE Broadcaster` | Server-Sent Events for real-time schema change notifications |
+| `Logger` | Structured logging with execution timing and request tracing |
 
 ---
 
-## 🛠️ Tech Stack
+## System Design Diagrams
 
-### Backend
-| Technology | Purpose |
-|---|---|
-| **FastAPI** | High-performance async Python web framework |
-| **Uvicorn** | ASGI server for running the FastAPI app |
-| **SQLAlchemy** | ORM and database toolkit for SQLite |
-| **SQLite** | Lightweight relational database |
-| **ChromaDB** | Vector database for semantic schema search and chat history |
-| **Sentence-Transformers** | Embedding model for vectorizing schema descriptions |
-| **Cerebras Cloud SDK** | LLM API for SQL generation (`gpt-oss-120b` model) |
-| **python-dotenv** | Environment variable management |
+### Activity Diagram: Query Processing Flow
 
-### Frontend
-| Technology | Purpose |
-|---|---|
-| **React 18** | Component-based UI library |
-| **Vite 5** | Fast build tool and dev server |
-| **TailwindCSS 3** | Utility-first CSS framework |
-| **Recharts** | Composable chart library for data visualization |
-| **Axios** | HTTP client for API communication |
-| **Lucide React** | Modern icon library |
+```mermaid
+flowchart TD
+    A[User Submits Question] --> B{Schema Selection Mode?}
+    B -->|Auto| C[Vector Search Top-3 Tables]
+    B -->|All Tables| D[Load Full Schema]
+    B -->|Specific| E[Load Selected Tables]
+    C --> F[Retrieve Chat History]
+    D --> F
+    E --> F
+    F --> G[Inject Sample Data]
+    G --> H[Construct LLM Prompt]
+    H --> I[Generate SQL via Groq]
+    I --> J{Is Modifying Query?}
+    J -->|Yes| K[Request User Confirmation]
+    K --> L{User Confirms?}
+    L -->|No| M[Abort & Return SQL]
+    L -->|Yes| N[Execute SQL]
+    J -->|No| N
+    N --> O{DDL Executed?}
+    O -->|Yes| P[Sync Schema to ChromaDB]
+    O -->|No| Q[Skip Sync]
+    P --> R[Store Chat Message]
+    Q --> R
+    R --> S[Return Results to User]
+```
+
+**Explanation**: This diagram illustrates the complete query lifecycle from user input to result display. The system dynamically selects schema retrieval strategy, incorporates conversational history, generates SQL via LLM, and handles safety confirmations for data-modifying operations.
+
+### Use Case Diagram
+
+```mermaid
+flowchart LR
+    subgraph UserActions[" " ]
+        U((User))
+    end
+    
+    subgraph TextToSQLSystem["Text-to-SQL System"]
+        UC1[Ask Natural Language Question]
+        UC2[Browse Database Schema]
+        UC3[Select Tables for Query Context]
+        UC4[View Generated SQL]
+        UC5[Execute Query with Confirmation]
+        UC6[Visualize Results]
+        UC7[View Query History]
+        UC8[Confirm Destructive Operations]
+    end
+    
+    subgraph SystemActions["System Actions"]
+        UC9[Auto-Retrieve Relevant Tables]
+        UC10[Generate SQL via LLM]
+        UC11[Execute SQL Safely]
+        UC12[Sync Schema Changes]
+    end
+    
+    U --> UC1
+    U --> UC2
+    U --> UC3
+    U --> UC4
+    U --> UC5
+    U --> UC6
+    U --> UC7
+    U --> UC8
+    
+    UC1 -.-> UC9
+    UC1 -.-> UC10
+    UC5 -.-> UC11
+    UC5 -.-> UC12
+```
+
+**Explanation**: The use case diagram shows interactions between the user and the system. The system automatically handles SQL generation and schema synchronization while requiring user confirmation for safety-critical operations.
+
+### Sequence Diagram: Query Execution Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant API as FastAPI
+    participant VS as VectorStore
+    participant LLM as LLM Service
+    participant DB as MySQL
+    participant CH as ChromaDB
+
+    U->>F: Enter natural language query
+    F->>API: POST /query {question, selected_tables}
+    
+    alt Auto Mode
+        API->>VS: search_schema(question, k=3)
+        VS->>CH: Semantic similarity search
+        CH-->>VS: Relevant table schemas
+    else Specific Tables
+        API->>VS: load_database_schema(filtered)
+    else All Tables
+        API->>VS: load_database_schema()
+    end
+    
+    VS-->>API: Schema context
+    API->>CH: retrieve_relevant_history(question)
+    CH-->>API: Historical Q&A pairs
+    
+    API->>DB: get_table_data(limit=5)
+    DB-->>API: Sample rows
+    
+    API->>LLM: generate_sql(question, schema, history)
+    LLM->>API: Constructed prompt with MySQL rules
+    LLM->>External: Groq API (llama-3.3-70b)
+    External-->>LLM: Generated SQL
+    LLM-->>API: SQL query string
+    
+    alt Modifying Query
+        API-->>F: Return {sql, requires_confirmation: true}
+        F->>U: Display SQL for review
+        U->>F: Confirm execution
+        F->>API: POST /execute {sql}
+    end
+    
+    API->>DB: execute_sql(query)
+    DB-->>API: Query results
+    
+    alt DDL Executed
+        API->>VS: sync_tables_to_schema()
+        VS->>CH: Upsert new schema embeddings
+    end
+    
+    API->>CH: store_chat_message(question, sql)
+    API-->>F: Return {sql, results}
+    F->>U: Display SQL, table, and chart
+```
+
+**Explanation**: This sequence diagram details the end-to-end flow including schema retrieval strategies, LLM prompt construction with MySQL-specific rules, safety confirmation for modifying queries, and bidirectional synchronization between the relational database and vector store.
+
+### Class Diagram
+
+```mermaid
+classDiagram
+    class FastAPIApp {
+        +app: FastAPI
+        +setup_middleware()
+        +setup_exception_handlers()
+        +lifespan()
+    }
+    
+    class QueryRoutes {
+        +router: APIRouter
+        +process_query(request: QueryRequest): QueryResponse
+        +execute_confirmed_query(request: ExecuteRequest): QueryResponse
+    }
+    
+    class LLMService {
+        -client: Groq
+        -model_name: str
+        -db_type: str
+        +generate_sql(question, schema, history): str
+        -construct_prompt(): str
+    }
+    
+    class SQLExecutor {
+        +execute_sql(query): Dict
+        +is_modifying_query(query): bool
+        -detect_query_type(query): str
+        -sanitize_value(value)
+        -split_statements(query): List
+    }
+    
+    class VectorStore {
+        -client: ChromaDB
+        -schema_collection: Collection
+        -chat_collection: Collection
+        +store_schema_embeddings(metadata)
+        +search_schema(query, k): List
+        +store_chat_message(question, sql)
+        +retrieve_relevant_history(query, k): List
+        +sync_tables_to_schema(tables): int
+    }
+    
+    class SchemaLoader {
+        +load_database_schema(): List
+        +get_table_data(table, limit): List
+    }
+    
+    class ChatPage {
+        -messages: State
+        -isLoading: State
+        +handleSendMessage(text, tables)
+        +handleConfirmQuery(index, question, sql)
+        +scrollToBottom()
+    }
+    
+    class ChatInput {
+        -input: State
+        -selectedTables: State
+        +handleSubmit()
+    }
+    
+    class DataChart {
+        +data: Array
+        +renderChart()
+    }
+    
+    class RequestModels {
+        +QueryRequest
+        +QueryResponse
+        +ExecuteRequest
+    }
+    
+    FastAPIApp --> QueryRoutes
+    QueryRoutes --> LLMService
+    QueryRoutes --> SQLExecutor
+    QueryRoutes --> VectorStore
+    QueryRoutes --> SchemaLoader
+    LLMService ..> "Uses" GroqAPI : External
+    SQLExecutor ..> "Uses" MySQL : External
+    VectorStore ..> "Uses" ChromaDB : External
+    SchemaLoader ..> "Uses" SQLAlchemy : External
+    ChatPage --> ChatInput
+    ChatPage --> DataChart
+    ChatPage ..> "Uses" APIClient : HTTP
+```
+
+**Explanation**: The class diagram shows the main components and their relationships. The backend follows a service-oriented design with clear interfaces between routing, LLM orchestration, SQL execution, and vector storage layers. The frontend uses React functional components with state management for the chat interface.
 
 ---
 
-## 📁 Project Structure
-
-```
-NLP Project/
-├── backend/
-│   ├── .env                          # Environment variables (API keys, DB URL)
-│   ├── requirements.txt              # Python dependencies
-│   ├── setup_dummy_db.py             # Script to populate sample data
-│   ├── clear_db.py                   # Script to clear all databases
-│   ├── check_db.py                   # Script to inspect database contents
-│   ├── sync_chroma.py                # Script to manually sync ChromaDB
-│   ├── app.db                        # SQLite database file
-│   ├── chroma_data/                  # ChromaDB persistent storage
-│   ├── logs/                         # Application log files
-│   │   └── app.log
-│   └── app/
-│       ├── main.py                   # FastAPI app, lifespan, middleware
-│       ├── config.py                 # Configuration (env vars, constants)
-│       ├── logger.py                 # Logging setup (file + console)
-│       ├── sse_broadcaster.py        # SSE event management
-│       ├── db/
-│       │   ├── database.py           # SQLAlchemy engine setup
-│       │   └── schema_loader.py      # Load schema metadata & table data
-│       ├── models/
-│       │   └── request_models.py     # Pydantic request/response models
-│       ├── routes/
-│       │   ├── query_routes.py       # POST /query/ — main NL-to-SQL pipeline
-│       │   └── schema_routes.py      # GET /schema/, GET /schema/events (SSE)
-│       ├── services/
-│       │   ├── llm_service.py        # Cerebras LLM integration & prompt engineering
-│       │   └── sql_executor.py       # Safe SQL execution with DDL detection
-│       └── vectorstore/
-│           └── vectordb.py           # ChromaDB operations (schema search, history)
-│
-└── frontend/
-    ├── index.html                    # Entry HTML
-    ├── package.json                  # Node.js dependencies
-    ├── vite.config.js                # Vite configuration
-    ├── tailwind.config.js            # TailwindCSS configuration
-    ├── postcss.config.js             # PostCSS configuration
-    └── src/
-        ├── main.jsx                  # React entry point
-        ├── App.jsx                   # Root component with routing
-        ├── components/
-        │   ├── ChatInput.jsx         # Message input + table selection pills
-        │   ├── ChatMessage.jsx       # Individual chat message bubble
-        │   ├── DataChart.jsx         # Interactive charts with axis selectors
-        │   ├── Loader.jsx            # Loading spinner component
-        │   ├── ResultTable.jsx       # Tabular results display
-        │   ├── SchemaExplorer.jsx    # Sidebar with live schema + SSE
-        │   └── SQLViewer.jsx         # SQL syntax display
-        ├── pages/
-        │   └── ChatPage.jsx          # Main chat page layout
-        ├── services/
-        │   └── api.js                # Axios API client
-        └── styles/
-            └── globals.css           # Global styles + Tailwind imports
-```
-
----
-
-## 🚀 Getting Started
+## Installation & Setup
 
 ### Prerequisites
 
-- **Python 3.8+** with conda (recommended: Anaconda/Miniconda)
-- **Node.js 18+** with npm
-- A **Cerebras API key** ([get one here](https://cloud.cerebras.ai/))
+| Requirement | Version | Purpose |
+|-------------|---------|---------|
+| Python | 3.9+ | Backend runtime |
+| Node.js | 18+ | Frontend build tools |
+| MySQL | 8.0+ | Primary database |
+| Conda | Latest | Environment management |
 
-### Backend Setup
+### Step-by-Step Installation
 
-1. **Create and activate a conda environment:**
-   ```bash
-   conda create -n text2sql python=3.10 -y
-   conda activate text2sql
-   ```
-
-2. **Install Python dependencies:**
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   ```
-
-3. **Configure environment variables:**
-   
-   Create a `.env` file in the `backend/` directory:
-   ```env
-   PORT=8000
-   DB_URL=sqlite:///./app.db
-   CEREBRAS_API_KEY=your_cerebras_api_key_here
-   ```
-
-4. **(Optional) Populate sample data:**
-   ```bash
-   python setup_dummy_db.py
-   ```
-
-5. **Start the backend server:**
-   ```bash
-   conda run -n text2sql --no-capture-output uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-   ```
-   
-   You should see:
-   ```
-   =======================================================
-     🚀  Text-to-SQL backend starting up...
-   =======================================================
-     ⏳  Syncing ChromaDB schema from SQLite...
-     ✅  Schema sync complete — 4 table(s) ready.
-     🌐  API live at http://localhost:8000
-     📖  Docs at    http://localhost:8000/docs
-   =======================================================
-   ```
-
-### Frontend Setup
-
-1. **Install dependencies:**
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-2. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
-
-3. **Open your browser** at `http://localhost:5173`
-
----
-
-## ⚙️ Configuration
-
-| Variable | Description | Default |
-|---|---|---|
-| `PORT` | Backend server port | `8000` |
-| `DB_URL` | SQLAlchemy database connection string | `sqlite:///./app.db` |
-| `CEREBRAS_API_KEY` | API key for Cerebras LLM | _(required)_ |
-
-The frontend connects to the backend at `http://localhost:8000` by default. To change this, set the `VITE_API_URL` environment variable before starting the frontend.
-
----
-
-## 📖 Usage
-
-1. **Ask a question** in the chat input, e.g.:
-   - _"Show all customers from Delhi"_
-   - _"Create a table called products with id, name, and price"_
-   - _"Insert sample data into customers"_
-
-2. **Select table context** using the pills above the chat input:
-   - **Auto** — Let the AI find the most relevant tables automatically (vector search).
-   - **All Tables** — Include every table's schema in the prompt.
-   - **Specific tables** — Click individual table names to include only those.
-
-3. **View results** — The assistant shows the generated SQL, a data table, and an interactive chart.
-
-4. **Customize the chart** — Use the X-Axis and Y-Axis dropdowns to change what's plotted. Switch between bar, line, and pie charts.
-
-5. **Browse the schema** — Open the sidebar to explore all tables and columns. It updates in real time when you create or modify tables.
-
----
-
-## 🔌 API Endpoints
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/query/` | Submit a natural language question. Returns generated SQL + results. |
-| `GET` | `/schema/` | Retrieve live database schema (tables + columns). |
-| `GET` | `/schema/events` | SSE stream — pushes `schema_changed` events to clients. |
-| `GET` | `/docs` | Auto-generated Swagger/OpenAPI documentation. |
-
-### Example Request
+#### 1. Clone and Navigate to Project
 
 ```bash
-curl -X POST http://localhost:8000/query/ \
+git clone <repository-url>
+cd "NLP Project"
+```
+
+#### 2. Set Up Conda Environment
+
+```bash
+# Create environment (recommended: computer_vision)
+conda create -n text2sql python=3.11
+conda activate text2sql
+
+# Or use existing computer_vision environment
+conda activate computer_vision
+```
+
+#### 3. Backend Setup
+
+```bash
+cd backend
+
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Configure environment variables
+cp .env.example .env
+# Edit .env with your credentials:
+# - DATABASE_URL: MySQL connection string
+# - GROQ_API_KEY: Your Groq API key
+# - DB_TYPE: mysql (default)
+
+# Initialize database schema sync
+python sync_chroma.py
+```
+
+#### 4. Frontend Setup
+
+```bash
+cd frontend
+
+# Install Node.js dependencies
+npm install
+
+# Build for production (optional)
+npm run build
+```
+
+### Environment Variables
+
+Create a `.env` file in the `backend/` directory:
+
+```env
+# Database Configuration
+DATABASE_URL=mysql+pymysql://root:password@localhost:3306/text2sql
+DB_TYPE=mysql
+
+# LLM API Configuration
+GROQ_API_KEY=your_groq_api_key_here
+
+# Server Configuration
+PORT=8000
+```
+
+---
+
+## Usage
+
+### Running the Project
+
+#### Start the Backend Server
+
+```bash
+conda activate computer_vision  # or your preferred environment
+cd backend
+python -m app.main
+```
+
+The backend will start on `http://localhost:8000` with:
+- API documentation at `http://localhost:8000/docs`
+- Health check at `http://localhost:8000/health`
+
+#### Start the Frontend Development Server
+
+```bash
+cd frontend
+npm run dev
+```
+
+The frontend will be available at `http://localhost:5173`
+
+#### Production Deployment
+
+```bash
+cd frontend
+npm run build
+# Serve dist/ folder via static file server or CDN
+```
+
+### Example Workflows
+
+#### Basic Query Flow
+
+1. **Navigate to the application** (`http://localhost:5173`)
+2. **Ask a question**: "Show me all employees in the engineering department"
+3. **Select schema mode**: Choose "Auto" for AI-selected tables or pick specific tables
+4. **Review results**: View generated SQL, result table, and data visualization
+
+#### Schema Exploration Workflow
+
+1. **Open Schema Explorer**: Click the menu button to view all database tables
+2. **Browse table structure**: Expand tables to see column names and types
+3. **Select context tables**: Choose specific tables to constrain the LLM context
+4. **Ask targeted questions**: Queries will only use selected table schemas
+
+#### Data Modification Workflow
+
+1. **Submit modifying query**: "Add a new employee John Doe to the HR department"
+2. **Review confirmation prompt**: System detects INSERT/UPDATE/DELETE/DDL
+3. **Verify generated SQL**: Review the SQL before execution
+4. **Confirm or cancel**: Click "Run Query" to execute or dismiss to abort
+5. **Automatic schema sync**: New tables/columns are automatically indexed
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check endpoint |
+| `/query` | POST | Submit natural language query |
+| `/execute` | POST | Execute confirmed modifying query |
+| `/schema` | GET | Retrieve database schema |
+| `/schema/events` | GET | SSE stream for schema changes |
+
+**Example API Request:**
+
+```bash
+curl -X POST "http://localhost:8000/query/" \
   -H "Content-Type: application/json" \
   -d '{
-    "question": "Show all customers from Delhi",
-    "selected_tables": ["customers"]
+    "question": "What are the top 5 products by sales?",
+    "selected_tables": ["Auto"]
   }'
 ```
 
-### Example Response
+---
 
-```json
-{
-  "sql": "SELECT * FROM customers WHERE city = 'Delhi';",
-  "results": [
-    { "customer_id": 1, "name": "Alice", "email": "alice@email.com", "city": "Delhi", "signup_date": "2023-01-10" },
-    { "customer_id": 3, "name": "Charlie", "email": "charlie@email.com", "city": "Delhi", "signup_date": "2023-03-01" }
-  ]
+## Performance Measurement & Execution Timing
+
+The system includes comprehensive timing instrumentation at multiple stages of query processing.
+
+### Extracting Execution Time from Logs
+
+Execution times are automatically logged to `backend/logs/app.log`:
+
+```log
+2024-01-15 10:30:45 - INFO - SQL execution time: 0.0234s | type: SELECT
+2024-01-15 10:30:46 - INFO - Total processing time: 2.3456s
+```
+
+**Log File Location:**
+- File: `backend/logs/app.log`
+- Rotation: Automatic with size-based rotation
+- Format: Timestamp, log level, message with timing
+
+### Displaying Execution Time to Users
+
+To add user-facing execution timing, modify the response models and UI:
+
+#### Backend Modification
+
+**File:** `backend/app/models/request_models.py`
+
+```python
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+
+class QueryResponse(BaseModel):
+    sql: str
+    results: List[Dict[str, Any]]
+    requires_confirmation: bool = False
+    execution_time_ms: Optional[float] = None  # Add this field
+    sql_generation_time_ms: Optional[float] = None  # Add this field
+```
+
+**File:** `backend/app/routes/query_routes.py`
+
+```python
+@router.post("/", response_model=QueryResponse)
+def process_query(request: QueryRequest):
+    import time
+    total_start = time.time()
+    
+    # Schema retrieval timing
+    schema_start = time.time()
+    schema_context = search_schema(request.question, k=3)
+    schema_time = (time.time() - schema_start) * 1000
+    
+    # LLM generation timing
+    llm_start = time.time()
+    generated_sql = llm_service.generate_sql(request.question, schema_context)
+    llm_time = (time.time() - llm_start) * 1000
+    
+    # SQL execution timing
+    sql_start = time.time()
+    exec_result = execute_sql(generated_sql)
+    sql_time = (time.time() - sql_start) * 1000
+    
+    total_time = (time.time() - total_start) * 1000
+    
+    return {
+        "sql": generated_sql,
+        "results": exec_result["rows"],
+        "execution_time_ms": total_time,
+        "sql_generation_time_ms": llm_time,
+        "schema_retrieval_time_ms": schema_time,
+        "sql_execution_time_ms": sql_time
+    }
+```
+
+#### Frontend Modification
+
+**File:** `frontend/src/components/QueryMetrics.jsx` (create new file)
+
+```jsx
+import React from 'react';
+import { Clock, Database, Brain, Search } from 'lucide-react';
+
+export default function QueryMetrics({ metrics }) {
+  if (!metrics) return null;
+  
+  const formatTime = (ms) => ms ? `${ms.toFixed(1)}ms` : '-';
+  
+  return (
+    <div className="flex gap-4 text-xs text-gray-400 mt-2">
+      <div className="flex items-center gap-1">
+        <Clock className="w-3 h-3" />
+        <span>Total: {formatTime(metrics.execution_time_ms)}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <Brain className="w-3 h-3" />
+        <span>LLM: {formatTime(metrics.sql_generation_time_ms)}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <Search className="w-3 h-3" />
+        <span>Schema: {formatTime(metrics.schema_retrieval_time_ms)}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <Database className="w-3 h-3" />
+        <span>SQL: {formatTime(metrics.sql_execution_time_ms)}</span>
+      </div>
+    </div>
+  );
 }
+```
+
+**Integration in ChatPage.jsx:**
+
+```jsx
+import QueryMetrics from '../components/QueryMetrics';
+
+// In the message rendering section:
+{!msg.isPending && !msg.isError && !msg.needsConfirmation && (
+  <>
+    <ChatMessage message={{ role: 'assistant', content: 'Here is the SQL query and result:' }} />
+    <div className="ml-12 max-w-full mt-4 flex flex-col gap-6">
+      <SQLViewer sql={msg.sql} />
+      <QueryMetrics metrics={msg.metrics} />
+      <ResultTable result={msg.result} />
+      <DataChart data={msg.result} />
+    </div>
+  </>
+)}
+```
+
+### Performance Optimization Tips
+
+1. **Vector Search Tuning**: Adjust `k` parameter in `search_schema()` for precision vs. recall trade-off
+2. **LLM Caching**: Implement response caching for repeated similar queries
+3. **Connection Pooling**: SQLAlchemy engine already uses connection pooling
+4. **Schema Sync Strategy**: Run `sync_chroma.py` only after DDL operations, not on every request
+
+---
+
+## Actual Measured Execution Times
+
+The following timing data was collected from actual query executions on the running system:
+
+### Sample Query Execution Times (from logs)
+
+| Query Type | SQL Execution Time | Total Processing Time | HTTP Response Time |
+|------------|-------------------|----------------------|-------------------|
+| SELECT * FROM student | 0.0032s | 0.3081s | 0.3091s |
+| ALTER TABLE (DROP COLUMN) | 0.0176s | 0.7851s | 0.7894s |
+| ALTER TABLE (ADD COLUMN) | 0.0182s | 1.3127s | 1.3144s |
+| ALTER TABLE (MODIFY) | 0.0119s | 0.4701s | 0.4714s |
+| DROP TABLE | 0.0270s | 0.6622s | 0.6664s |
+| CREATE TABLE | 0.0198s | 1.3210s | 1.3225s |
+
+### Timing Statistics Summary
+
+| Metric | Min | Max | Average |
+|--------|-----|-----|---------|
+| SQL Execution Time | 0.0020s | 0.0270s | ~0.0127s |
+| Total Processing Time | 0.3081s | 1.3210s | ~0.7013s |
+| HTTP Response Time | 0.3091s | 1.3225s | ~0.7034s |
+
+### Key Observations
+
+- **Simple SELECT queries** execute in ~2-3ms at the database level
+- **DDL operations** (ALTER, DROP, CREATE) take 12-27ms for SQL execution
+- **Total end-to-end latency** ranges from 0.3s to 1.3s depending on:
+  - LLM generation time (majority of the latency)
+  - Schema retrieval from vector store
+  - Database query complexity
+- **Schema sync overhead** adds ~40-100ms when DDL operations are executed
+
+### Log Entry Examples
+
+```log
+# SELECT Query Timing
+2026-03-28 16:41:30,249 - SQL execution time: 0.0020s | type: SELECT
+2026-03-28 16:41:30,274 - Total processing time: 0.5008s
+2026-03-28 16:41:30,275 - SUCCESS (200) - Time: 0.5024s
+
+# DDL Operation Timing
+2026-03-28 16:41:55,486 - SQL execution time: 0.0198s | type: ALTER
+2026-03-28 16:41:55,520 - Schema sync complete. 1 table(s) upserted
+2026-03-28 16:41:55,546 - Total processing time: 1.3210s
+2026-03-28 16:41:55,548 - SUCCESS (200) - Time: 1.3225s
 ```
 
 ---
 
-## 📝 Utility Scripts
+## Full Pipeline Timing Breakdown
 
-| Script | Description |
-|---|---|
-| `setup_dummy_db.py` | Creates sample `customers` and `orders` tables with test data |
-| `clear_db.py` | Drops all SQLite tables and clears ChromaDB collections |
-| `check_db.py` | Prints current database tables and row counts |
-| `sync_chroma.py` | Manually re-syncs SQLite schema into ChromaDB |
+The following table shows the detailed timing breakdown for each component in the query processing pipeline, measured from actual query executions:
+
+### Component Timing Analysis
+
+| Pipeline Stage | Description | Typical Time | Percentage |
+|----------------|-------------|--------------|------------|
+| **Schema Retrieval** | Vector search for relevant tables | 0.0440s | ~3.9% |
+| **Table Data Fetch** | Query sample data from tables | 0.0045s | ~0.4% |
+| **History Retrieval** | Retrieve chat context from ChromaDB | 0.0020s | ~0.2% |
+| **LLM Generation** | Groq API call (llama-3.3-70b) | 1.0183s | ~89.2% |
+| **SQL Execution** | Execute generated SQL on MySQL | 0.0023s | ~0.2% |
+| **Schema Sync** | Update vector store (if DDL) | 0.0000s | ~0% |
+| **Chat Store** | Store Q&A in history | 0.0700s | ~6.1% |
+| **Overhead** | Serialization, logging, etc. | ~0.001s | ~0.2% |
+| **TOTAL** | End-to-end processing | **1.1411s** | **100%** |
+
+### Key Observations
+
+1. **LLM Generation Dominates**: The Groq API call accounts for ~89% of total processing time (~1.02s). This is expected for LLM-based systems.
+
+2. **Vector Operations are Fast**: Schema retrieval (0.044s) and history retrieval (0.002s) using ChromaDB are very efficient.
+
+3. **Database Operations are Minimal**: SQL execution on MySQL is extremely fast (~2-3ms) for typical queries.
+
+4. **Chat Storage Overhead**: Storing conversation history takes ~70ms due to ChromaDB embeddings generation.
+
+### LLM Generation Time Details
+
+The LLM generation time varies based on:
+
+| Factor | Impact on Time |
+|--------|----------------|
+| Query complexity | Complex queries with JOINs take longer |
+| Schema size | More tables/columns = longer context |
+| Network latency | Groq API response time varies |
+| Temperature setting | Lower temp = faster deterministic responses |
+
+**Typical LLM Generation Times Observed:**
+- Simple SELECT: 0.8-1.2s
+- Complex JOIN queries: 1.0-1.5s
+- DDL statements: 0.9-1.3s
+
+### Full Pipeline Log Example
+
+```log
+2026-04-06 12:18:18,114 - Strategy: Auto (Vector Search)
+2026-04-06 12:18:18,158 - Schema retrieval time: 0.0440s
+2026-04-06 12:18:18,162 - Table data fetch time: 0.0045s
+2026-04-06 12:18:18,166 - History retrieval time: 0.0020s
+2026-04-06 12:18:19,185 - *** LLM GENERATION TIME: 1.0183s ***
+2026-04-06 12:18:19,260 - SQL execution time: 0.0023s
+2026-04-06 12:18:19,260 - Chat message store time: 0.0700s
+2026-04-06 12:18:19,260 - PIPELINE TIMING BREAKDOWN:
+2026-04-06 12:18:19,260 -   Schema Retrieval:    0.0440s
+2026-04-06 12:18:19,260 -   Table Data Fetch:    0.0045s
+2026-04-06 12:18:19,260 -   History Retrieval:   0.0020s
+2026-04-06 12:18:19,260 -   LLM Generation:      1.0183s
+2026-04-06 12:18:19,262 -   SQL Execution:       0.0023s
+2026-04-06 12:18:19,262 -   Schema Sync:         0.0000s
+2026-04-06 12:18:19,262 -   Chat Store:          0.0700s
+2026-04-06 12:18:19,262 - Total processing time: 1.1411s
+```
+
+### Optimization Recommendations
+
+Based on the pipeline timing analysis:
+
+1. **Enable LLM Response Caching**: Cache common queries to avoid repeated LLM calls (potential 89% time savings for cached queries)
+
+2. **Optimize Schema Retrieval**: The current 44ms can be reduced by:
+   - Pre-caching schema embeddings
+   - Using smaller embedding models for schema search
+
+3. **Async Chat Storage**: Store chat history asynchronously to avoid blocking the response
+
+4. **Connection Pooling**: Already implemented - SQL execution time is minimal at ~2ms
 
 ---
 
-## 🤝 Contributing
+## Project Structure
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+```
+NLP Project/
+├── README.md                          # This documentation file
+├── backend/                           # Python FastAPI backend
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── config.py                  # Configuration management
+│   │   ├── logger.py                  # Structured logging setup
+│   │   ├── main.py                    # FastAPI application entry point
+│   │   ├── sse_broadcaster.py         # Server-Sent Events for schema changes
+│   │   ├── db/                        # Database layer
+│   │   │   ├── __init__.py
+│   │   │   ├── database.py            # SQLAlchemy engine and session
+│   │   │   └── schema_loader.py       # Schema introspection utilities
+│   │   ├── models/                    # Pydantic request/response models
+│   │   │   ├── __init__.py
+│   │   │   └── request_models.py      # QueryRequest, QueryResponse
+│   │   ├── routes/                    # API route handlers
+│   │   │   ├── __init__.py
+│   │   │   ├── query_routes.py        # /query and /execute endpoints
+│   │   │   └── schema_routes.py       # /schema endpoints and SSE
+│   │   ├── services/                  # Business logic services
+│   │   │   ├── __init__.py
+│   │   │   ├── llm_service.py         # LLM orchestration (Groq)
+│   │   │   └── sql_executor.py        # Safe SQL execution engine
+│   │   └── vectorstore/               # Vector database integration
+│   │       ├── __init__.py
+│   │       └── vectordb.py            # ChromaDB schema and history management
+│   ├── chroma_data/                   # Persistent ChromaDB storage
+│   ├── logs/                          # Application logs
+│   ├── .env                           # Environment variables (not in git)
+│   ├── check_db.py                    # Database connectivity test
+│   ├── clear_db.py                    # Database reset utility
+│   ├── requirements.txt               # Python dependencies
+│   ├── setup_dummy_db.py              # Sample data generator
+│   └── sync_chroma.py                 # Schema synchronization script
+├── frontend/                          # React SPA frontend
+│   ├── src/
+│   │   ├── App.jsx                    # Root component
+│   │   ├── main.jsx                   # Entry point
+│   │   ├── components/                # React components
+│   │   │   ├── ChatInput.jsx          # User input with schema selector
+│   │   │   ├── ChatMessage.jsx        # Message bubble component
+│   │   │   ├── DataChart.jsx          # Recharts visualization wrapper
+│   │   │   ├── Loader.jsx             # Loading indicator
+│   │   │   ├── ResultTable.jsx        # Data table renderer
+│   │   │   ├── SchemaExplorer.jsx     # Database schema sidebar
+│   │   │   └── SQLViewer.jsx          # Syntax-highlighted SQL display
+│   │   ├── pages/
+│   │   │   └── ChatPage.jsx           # Main chat interface page
+│   │   ├── services/
+│   │   │   └── api.js                 # HTTP client for backend API
+│   │   └── styles/
+│   │       └── (Tailwind CSS classes)
+│   ├── dist/                          # Production build output
+│   ├── index.html                     # HTML template
+│   ├── package.json                   # Node.js dependencies
+│   ├── vite.config.js                 # Vite build configuration
+│   ├── tailwind.config.js             # Tailwind CSS configuration
+│   └── postcss.config.js              # PostCSS configuration
+└── Backup/                            # Project backup files
+```
+
+### Key Files Reference
+
+| File Path | Purpose |
+|-----------|---------|
+| `backend/app/main.py` | FastAPI application setup, middleware, logging |
+| `backend/app/routes/query_routes.py` | Core query processing endpoint |
+| `backend/app/services/llm_service.py` | LLM integration with Groq |
+| `backend/app/vectorstore/vectordb.py` | ChromaDB vector operations |
+| `frontend/src/pages/ChatPage.jsx` | Main UI component |
+| `frontend/src/components/DataChart.jsx` | Data visualization |
 
 ---
 
-## 📄 License
+## Configuration & Hyperparameters
 
-This project is open source and available under the [MIT License](LICENSE).
+### Backend Configuration (`backend/app/config.py`)
+
+| Parameter | Description | Default Value | Type | Range/Options |
+|-----------|-------------|---------------|------|---------------|
+| `PROJECT_NAME` | API title for documentation | "Text-to-SQL API" | String | Any valid string |
+| `PORT` | HTTP server port | 8000 | Integer | 1024-65535 |
+| `DATABASE_URL` | SQLAlchemy connection string | `mysql+pymysql://root:password@localhost:3306/text2sql` | String | Valid SQLAlchemy URL |
+| `DB_TYPE` | Database dialect for LLM prompts | "mysql" | String | "mysql", "postgresql", "sqlite" |
+| `GROQ_API_KEY` | API key for LLM access | "" (from env) | String | Valid Groq API key |
+
+### Vector Store Parameters (`backend/app/vectorstore/vectordb.py`)
+
+| Parameter | Description | Default Value | Type | Range/Options |
+|-----------|-------------|---------------|------|---------------|
+| `CHROMA_DB_PATH` | Persistent storage directory | `"chroma_data"` | String | Valid filesystem path |
+| `EMBEDDING_MODEL` | Sentence transformer model | `"all-MiniLM-L6-v2"` | String | Any HuggingFace sentence-transformer |
+| `SCHEMA_SEARCH_K` | Number of tables to retrieve | 3 | Integer | 1-10 |
+| `HISTORY_SEARCH_K` | Number of history items to retrieve | 3 | Integer | 1-10 |
+| `TABLE_SAMPLE_LIMIT` | Rows to include in LLM context | 5 | Integer | 0-20 |
+
+### LLM Parameters (`backend/app/services/llm_service.py`)
+
+| Parameter | Description | Default Value | Type | Range/Options |
+|-----------|-------------|---------------|------|---------------|
+| `MODEL_NAME` | LLM model identifier | `"llama-3.3-70b-versatile"` | String | Available Groq models |
+| `TEMPERATURE` | Sampling randomness | 0.2 | Float | 0.0-1.0 |
+| `MAX_TOKENS` | Maximum response length | 4096 | Integer | 256-8192 |
+| `DB_RULES` | Database-specific SQL constraints | MySQL rules | Dict | DB-specific prompts |
+
+### Frontend Configuration (`frontend/vite.config.js`)
+
+| Parameter | Description | Default Value | Type | Range/Options |
+|-----------|-------------|---------------|------|---------------|
+| `server.port` | Dev server port | 5173 | Integer | 1024-65535 |
+| `server.proxy` | API proxy target | `http://localhost:8000` | String | Valid URL |
+| `build.outDir` | Production output | "dist" | String | Valid path |
+
+---
+
+## Metrics & Evaluation
+
+### Evaluation Metrics
+
+| Metric | Description | Formula | Use Case |
+|--------|-------------|---------|----------|
+| **SQL Generation Accuracy** | Percentage of syntactically valid SQL queries | `valid_queries / total_queries × 100` | Model performance monitoring |
+| **Schema Retrieval Precision** | Relevance of retrieved tables to query intent | `relevant_tables / retrieved_tables` | Vector search tuning |
+| **Schema Retrieval Recall** | Coverage of necessary tables for query | `retrieved_necessary / total_necessary` | System completeness |
+| **End-to-End Latency** | Total time from request to response | `T_response - T_request` | User experience optimization |
+| **LLM Latency** | Time for LLM to generate SQL | `T_llm_response - T_llm_request` | API performance tracking |
+| **SQL Execution Time** | Database query execution duration | `T_exec_complete - T_exec_start` | Database optimization |
+| **User Confirmation Rate** | Frequency of safety prompts | `confirmations_required / total_modifying` | Safety system calibration |
+| **Query Success Rate** | Successful query executions | `successful_executions / total_attempts` | System reliability |
+
+### Performance Benchmarks
+
+| Operation | Expected Latency | Acceptable Range |
+|-----------|-----------------|------------------|
+| Schema Vector Search | 50-150ms | < 500ms |
+| LLM SQL Generation | 500-2000ms | < 5000ms |
+| SQL Execution | 10-500ms | < 2000ms |
+| Total End-to-End | 1000-3000ms | < 8000ms |
+
+---
+
+## Dependencies
+
+### Backend Dependencies (`backend/requirements.txt`)
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `fastapi` | Latest | Web framework for API endpoints |
+| `uvicorn` | Latest | ASGI server for FastAPI |
+| `sqlalchemy` | Latest | ORM and database abstraction |
+| `pymysql` | Latest | MySQL database driver |
+| `chromadb` | Latest | Vector database for embeddings |
+| `sentence-transformers` | Latest | Text embedding generation |
+| `python-dotenv` | Latest | Environment variable management |
+| `groq` | Latest | Groq LLM API client |
+| `cryptography` | Latest | Secure credential handling |
+
+### Frontend Dependencies (`frontend/package.json`)
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `react` | ^18.2.0 | UI framework |
+| `react-dom` | ^18.2.0 | React DOM renderer |
+| `axios` | ^1.6.0 | HTTP client for API calls |
+| `lucide-react` | ^0.300.0 | Icon library |
+| `recharts` | ^3.8.0 | Data visualization charts |
+| `vite` | ^5.0.0 | Build tool and dev server |
+| `tailwindcss` | ^3.3.5 | Utility-first CSS framework |
+| `@vitejs/plugin-react` | ^4.2.0 | Vite React plugin |
+
+### External Services
+
+| Service | Purpose | Required |
+|---------|---------|----------|
+| Groq API | LLM inference for SQL generation | Yes |
+| MySQL | Primary relational database | Yes |
+| ChromaDB | Vector storage (local or remote) | Yes (local included) |
+
+---
+
+## Contributing Guidelines
+
+### Getting Started
+
+1. **Fork the repository** and clone your fork
+2. **Create a feature branch**: `git checkout -b feature/your-feature-name`
+3. **Set up development environment** following Installation & Setup
+4. **Make changes** with clear, focused commits
+5. **Test thoroughly** before submitting
+
+### Code Style
+
+- **Python**: Follow PEP 8 guidelines
+- **JavaScript/React**: Use consistent formatting with ESLint/Prettier
+- **Commits**: Use conventional commit format (`feat:`, `fix:`, `docs:`, `refactor:`)
+
+### Submitting Changes
+
+1. **Update documentation** for any API or configuration changes
+2. **Add tests** for new functionality
+3. **Ensure all tests pass** before submitting PR
+4. **Fill out the PR template** with description and motivation
+5. **Request review** from maintainers
+
+### Areas for Contribution
+
+| Area | Description | Skill Level |
+|------|-------------|-------------|
+| LLM Prompt Engineering | Improve SQL generation accuracy | Intermediate |
+| Vector Search Optimization | Enhance schema retrieval | Advanced |
+| UI/UX Improvements | Frontend feature additions | Beginner-Intermediate |
+| Database Support | Add PostgreSQL/SQLite adapters | Intermediate |
+| Testing | Unit and integration tests | Beginner-Intermediate |
+| Documentation | README, code comments, guides | Beginner |
+
+### Reporting Issues
+
+When reporting bugs, include:
+- **Steps to reproduce**
+- **Expected behavior**
+- **Actual behavior**
+- **Environment details** (OS, Python version, Node version)
+- **Relevant logs** from `backend/logs/app.log`
+
+---
+
+## License
+
+This project is licensed under the MIT License.
+
+```
+MIT License
+
+Copyright (c) 2026 KBM
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+
+## Acknowledgments
+
+- **Groq** for providing fast LLM inference
+- **ChromaDB** for open-source vector storage
+- **Sentence-Transformers** for efficient text embeddings
+- **FastAPI** for modern Python web framework
+- **React & Tailwind CSS** for frontend tooling
+
+---
+
+*For questions or support, please open an issue in the project repository.*
